@@ -1,11 +1,12 @@
 # app/app.py
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Depends
-from app.schemas import UserRead, UserCreate, UserUpdate
+from app.schemas import UserRead, UserCreate, UserUpdate, OCRResponse
 from app.db import Post, create_db_and_tables, get_async_session, User
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
 from sqlalchemy import select
 from app.images import upload_image
+from app.ocr import perform_ocr
 from app.users import auth_backend, current_active_user, fastapi_users
 import os
 import uuid
@@ -100,6 +101,33 @@ async def upload_file(
         if temp_file_path and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
         file.file.close()
+
+
+@app.post("/ocr", response_model=OCRResponse)
+async def ocr_document(
+        file: UploadFile = File(...),
+        user: User = Depends(current_active_user)
+):
+    if not file.content_type:
+        raise HTTPException(status_code=400, detail="File content type is required")
+
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported")
+
+    image_bytes = await file.read()
+    try:
+        ocr_result = await perform_ocr(image_bytes, file.content_type, file.filename)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {
+        "status": "ok",
+        "filename": file.filename,
+        "model": ocr_result["model"],
+        "elapsed_ms": ocr_result["elapsed_ms"],
+        "usage": ocr_result["usage"],
+        "ocr": ocr_result["content"],
+    }
 
 
 #FEED

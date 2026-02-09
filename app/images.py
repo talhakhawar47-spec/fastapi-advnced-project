@@ -3,17 +3,22 @@ from dotenv import load_dotenv
 from imagekitio import ImageKit
 
 load_dotenv()
-
+PUBLIC_KEY = os.getenv("IMAGEKIT_PUBLIC_KEY")
 PRIVATE_KEY = os.getenv("IMAGEKIT_PRIVATE_KEY")
+URL_ENDPOINT = os.getenv("IMAGEKIT_URL_ENDPOINT")
+
 
 if not PRIVATE_KEY:
     raise ValueError("Missing IMAGEKIT_PRIVATE_KEY in .env")
+if not PUBLIC_KEY:
+    raise ValueError("Missing IMAGEKIT_PUBLIC_KEY in .env")
+if not URL_ENDPOINT:
+    raise ValueError("Missing IMAGEKIT_URL_ENDPOINT in .env")
 
-# The ImageKit SDK (v5.1.0) expects private_key and optionally base_url.
-# For uploads, it's safer to use the dedicated upload endpoint.
+# The ImageKit SDK (v5.1.0) expects private_key and base_url.
 imagekit = ImageKit(
     private_key=PRIVATE_KEY,
-    base_url="https://upload.imagekit.io"
+    base_url=URL_ENDPOINT
 )
 
 def upload_image(file_path: str, file_name: str = None, use_unique_file_name: bool = True):

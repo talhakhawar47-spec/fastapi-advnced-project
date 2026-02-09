@@ -18,3 +18,22 @@ class UserCreate(schemas.BaseUserCreate):
 
 class UserUpdate(schemas.BaseUserUpdate):
     pass
+
+class OCRDocument(BaseModel):
+    filename: str
+    handwritten: bool
+    language: str
+    text: str
+    notes: str
+
+class OCRResult(BaseModel):
+    status: str
+    document: OCRDocument
+
+class OCRResponse(BaseModel):
+    status: str
+    filename: str
+    model: str
+    elapsed_ms: int
+    usage: dict
+    ocr: OCRResult
