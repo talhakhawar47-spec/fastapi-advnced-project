@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from fastapi_users import schemas
 import uuid
+from typing import Union, Any
 
 class PostCreate(BaseModel):
     title: str
@@ -36,4 +37,11 @@ class OCRResponse(BaseModel):
     model: str
     elapsed_ms: int
     usage: dict
-    ocr: OCRResult
+    ocr: Union[OCRResult, str, None]
+    ocr_raw: str | None = None
+    ocr_parse_error: str | None = None
+
+class ScanOCRRequest(BaseModel):
+    image_data: str
+    filename: str | None = None
+    mime_type: str | None = None

@@ -4,11 +4,31 @@ import os
 import time
 import httpx
 
-
+DEFAULT_OCR_MIME_TYPE = "image/jpeg"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
-GROQ_OCR_MODEL = os.getenv("GROQ_OCR_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+GROQ_OCR_MODEL = os.getenv(
+    "GROQ_OCR_MODEL",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+)
 GROQ_TIMEOUT_SECONDS = float(os.getenv("GROQ_TIMEOUT_SECONDS", "45"))
+
+
+def decode_image_payload(image_data: str) -> tuple[bytes, str]:
+    """
+    Decodes a base64 image payload which might start with a 'data:image/...;base64,' prefix.
+    Returns (image_bytes, mime_type).
+    """
+    if "," in image_data:
+        header, encoded = image_data.split(",", 1)
+        mime_type = header.split(";")[0].split(":")[1]
+        image_bytes = base64.b64decode(encoded)
+    else:
+        # Fallback if raw base64 is provided
+        image_bytes = base64.b64decode(image_data)
+        mime_type = DEFAULT_OCR_MIME_TYPE
+    return image_bytes, mime_type
+
 
 
 def _build_prompt(filename: str) -> str:
@@ -65,6 +85,13 @@ async def perform_ocr(image_bytes: bytes, mime_type: str, filename: str) -> dict
         response.raise_for_status()
     data = response.json()
     content_str = data["choices"][0]["message"]["content"]
+    if isinstance(content_str, str):
+        cleaned = content_str.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            if cleaned.lower().startswith("json"):
+                cleaned = cleaned[4:].strip()
+        content_str = cleaned
     
     try:
         content = json.loads(content_str)
@@ -89,8 +116,11 @@ async def perform_ocr(image_bytes: bytes, mime_type: str, filename: str) -> dict
         }
 
     return {
+        "status": content.get("status", "ok"),
         "model": data.get("model", GROQ_OCR_MODEL),
         "elapsed_ms": elapsed_ms,
         "usage": data.get("usage", {}),
         "content": content,
+        "raw_content": content_str,
+        "parse_error": None if content.get("status") != "error" else content.get("document", {}).get("notes")
     }

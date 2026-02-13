@@ -8,6 +8,7 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "fastapi>=0.128.0",
     "fastapi-users[sqlalchemy]>=15.0.3",
+    "httpx>=0.28.1",
     "imagekitio>=5.1.0",
     "pillow>=12.1.0",
     "python-dotenv>=1.2.1",

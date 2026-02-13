@@ -1,0 +1,22 @@
+create venv 
+python -m venv venv
+
+activation
+venv/scripts/activate
+
+run
+python -m uvicorn books:app --reload
+------------------------------------------------------
+connecting PostgreSQL with my project 
+
+
+
+TO save changes in git
+
+1)  git add .
+2)  git commit -m "update 97"
+3)  git push
+
+
+UP next i want to udate and add jwt auth and and make nd runit from an ip that everyone can view it how do i do that
+

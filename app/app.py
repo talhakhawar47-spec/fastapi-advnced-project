@@ -1,13 +1,17 @@
 # app/app.py
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Depends
-from app.schemas import UserRead, UserCreate, UserUpdate, OCRResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from app.schemas import UserRead, UserCreate, UserUpdate, ScanOCRRequest, OCRResponse
 from app.db import Post, create_db_and_tables, get_async_session, User
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
 from sqlalchemy import select
 from app.images import upload_image
-from app.ocr import perform_ocr
+from app.ocr import perform_ocr, decode_image_payload, DEFAULT_OCR_MIME_TYPE
 from app.users import auth_backend, current_active_user, fastapi_users
+import base64
 import os
 import uuid
 import shutil
@@ -19,7 +23,25 @@ async def lifespan(app: FastAPI):
     await create_db_and_tables()
     yield
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui() -> HTMLResponse:
+    swagger_html = get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - Swagger UI",
+        swagger_ui_parameters={
+            "tryItOutEnabled": True,
+            "persistAuthorization": True,
+        },
+    )
+    page = swagger_html.body.decode("utf-8").replace(
+        "</body>",
+        '<script src="/static/swagger-camera.js"></script></body>',
+    )
+    return HTMLResponse(content=page, status_code=200)
 
 # AUTH ROUTES
 app.include_router(
@@ -103,9 +125,16 @@ async def upload_file(
         file.file.close()
 
 
+
 @app.post("/ocr", response_model=OCRResponse)
 async def ocr_document(
-        file: UploadFile = File(...),
+           file: UploadFile = File(
+            ...,
+            description=(
+                "Upload or capture a document image. On mobile devices, this file "
+                "picker can open the camera directly."
+            ),
+        ),
         user: User = Depends(current_active_user)
 ):
     if not file.content_type:
@@ -121,13 +150,73 @@ async def ocr_document(
         raise HTTPException(status_code=500, detail=str(exc))
 
     return {
-        "status": "ok",
+        "status": ocr_result["status"],
         "filename": file.filename,
         "model": ocr_result["model"],
         "elapsed_ms": ocr_result["elapsed_ms"],
         "usage": ocr_result["usage"],
         "ocr": ocr_result["content"],
+        "ocr_raw": ocr_result["raw_content"],
+        "ocr_parse_error": ocr_result["parse_error"],
     }
+
+
+
+@app.post("/scan-ocr", response_model=OCRResponse)
+async def scan_ocr_document(
+        file: UploadFile | None = File(None),
+        image_data: str | None = Form(None),
+        filename: str | None = Form(None),
+        mime_type: str | None = Form(None),
+        user: User = Depends(current_active_user)
+):
+    is_file_provided = file is not None and file.filename != ""
+    is_data_provided = image_data is not None and image_data.strip() != ""
+
+    if not is_file_provided and not is_data_provided:
+        raise HTTPException(status_code=400, detail="Upload a file or provide image_data")
+
+    if is_file_provided and is_data_provided:
+        raise HTTPException(status_code=400, detail="Provide either file or image_data, not both")
+
+    if is_file_provided:
+        # We checked file is not None above, but for type hinting we can use an assertion
+        assert file is not None 
+        if not file.content_type:
+            raise HTTPException(status_code=400, detail="File content type is required")
+
+        if not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Only image uploads are supported")
+
+        image_bytes = await file.read()
+        resolved_mime_type = file.content_type
+        resolved_filename = file.filename
+    else:
+        resolved_filename = filename or "scan-ocr"
+        try:
+            image_bytes, resolved_mime_type = decode_image_payload(image_data)
+        except (TypeError, ValueError, IndexError) as exc:
+            raise HTTPException(status_code=400, detail="image_data must be valid base64 or data URL") from exc
+        
+        if mime_type: # override if explicitly provided
+             resolved_mime_type = mime_type
+
+    try:
+        ocr_result = await perform_ocr(image_bytes, resolved_mime_type, resolved_filename)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {
+        "status": ocr_result["status"],
+        "filename": resolved_filename,
+        "model": ocr_result["model"],
+        "elapsed_ms": ocr_result["elapsed_ms"],
+        "usage": ocr_result["usage"],
+        "ocr": ocr_result["content"],
+        "ocr_raw": ocr_result["raw_content"],
+        "ocr_parse_error": ocr_result["parse_error"],
+    }
+
 
 
 #FEED

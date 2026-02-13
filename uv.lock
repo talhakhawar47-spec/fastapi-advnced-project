@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -339,6 +339,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "fastapi" },
     { name = "fastapi-users", extra = ["sqlalchemy"] },
+    { name = "httpx" },
     { name = "imagekitio" },
     { name = "pillow" },
     { name = "python-dotenv" },
@@ -351,6 +352,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "fastapi-users", extras = ["sqlalchemy"], specifier = ">=15.0.3" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "imagekitio", specifier = ">=5.1.0" },
     { name = "pillow", specifier = ">=12.1.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
